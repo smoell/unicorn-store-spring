@@ -4,15 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unicorn.store.model.Unicorn;
 import com.unicorn.store.model.UnicornEventType;
-
-import jakarta.annotation.PostConstruct;
-import org.crac.Context;
-import org.crac.Core;
-import org.crac.Resource;
-
+// import com.unicorn.store.otel.TracingRequestInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -28,18 +22,15 @@ public class UnicornPublisher {
 
     private final ObjectMapper objectMapper;
 
-    private final Logger logger = LoggerFactory.getLogger(UnicornPublisher.class);
+    private Logger logger = LoggerFactory.getLogger(UnicornPublisher.class);
 
-    private EventBridgeAsyncClient eventBridgeClient;
+    private static final EventBridgeAsyncClient eventBridgeClient = EventBridgeAsyncClient
+            .builder()
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .build();
 
     public UnicornPublisher(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-    }
-
-    @PostConstruct
-    public void init() {
-        createClient();
-        //Core.getGlobalContext().register(this);
     }
 
     public void publish(Unicorn unicorn, UnicornEventType unicornEventType) {
@@ -49,11 +40,11 @@ public class UnicornPublisher {
             logger.info(unicornJson);
 
             var eventsRequest = createEventRequestEntry(unicornEventType, unicornJson);
-            // eventBridgeClient.putEvents(eventsRequest).get();
+            eventBridgeClient.putEvents(eventsRequest).get();
         } catch (JsonProcessingException e) {
             logger.error("Error JsonProcessingException ...");
             logger.error(e.getMessage());
-        } catch (EventBridgeException e) {
+        } catch (EventBridgeException | ExecutionException | InterruptedException e) {
             logger.error("Error EventBridgeException | ExecutionException ...");
             logger.error(e.getMessage());
         }
@@ -70,34 +61,5 @@ public class UnicornPublisher {
         return PutEventsRequest.builder()
                 .entries(entry)
                 .build();
-    }
-
-    /*
-    @Override
-    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-        logger.info("Executing beforeCheckpoint...");
-        closeClient();
-    }
-
-    @Override
-    public void afterRestore(Context<? extends Resource> context) throws Exception {
-        logger.info("Executing afterRestore ...");
-        createClient();
-    }
-     */
-
-    private void createClient() {
-        logger.info("Creating EventBridgeAsyncClient");
-        /*
-        eventBridgeClient = EventBridgeAsyncClient
-                .builder()
-                .credentialsProvider(DefaultCredentialsProvider.create())
-                .build();
-         */
-    }
-
-    public void closeClient() {
-        logger.info("Closing EventBridgeAsyncClient");
-        // eventBridgeClient.close();
     }
 }
